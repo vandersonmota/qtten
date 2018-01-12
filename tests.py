@@ -31,9 +31,8 @@ class TestQtten(unittest.TestCase):
         big_msg = 'big msg' * 5120000
         self.q.enqueue(big_msg)
 
-        with open(self.q.filename, 'rb') as fd:
-            contents = fd.read()
-            self.assertLess(sys.getsizeof(contents), sys.getsizeof(big_msg))
+        contents = self.q.q.read()
+        self.assertLess(sys.getsizeof(contents), sys.getsizeof(big_msg))
 
 
 if __name__ == '__main__':

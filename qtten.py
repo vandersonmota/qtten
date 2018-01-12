@@ -8,32 +8,46 @@ NUL_BYTE = b'\x00'
 
 class Queue:
     def __init__(self, filename):
-        self.filename = filename
+        try:
+            self.q = open(filename, 'r+b')
+        except FileNotFoundError:
+            self.q = open(filename, 'w+b')
+
+    def __del__(self):
+        self.q.close()
 
     def enqueue(self, message):
-        with open(self.filename, 'ab') as q:
-            q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
-            q.write(MSG_END_CHAR)
+        self.q.seek(0, 2)
+        self.q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
+        self.q.write(MSG_END_CHAR)
+        self._commit()
 
     def dequeue(self):
-        with open(self.filename, 'r+b') as q:
-            first_msg = None
-            second_msg = None
-            first_msg = q.readline().strip()
-            if first_msg:
-                second_msg = q.readline().strip()
-            else:
-                return None
+        import pdb; pdb.set_trace()
+        self.q.seek(0)
+        first_msg = None
+        second_msg = None
+        first_msg = self.q.readline().strip()
+        if first_msg:
+            second_msg = self.q.readline().strip()
+        else:
+            return None
 
-            if second_msg:
-                q.seek(0)
-                new_message_size = len(first_msg) + len(second_msg) + 1
-                q.write(NUL_BYTE * new_message_size)
-                q.write(MSG_END_CHAR)
-                q.seek(0)
-                q.write(second_msg)
-            else:
-                q.seek(0)
-                q.truncate()
+        if second_msg:
+            self.q.seek(0)
+            new_message_size = len(first_msg) + len(second_msg) + 1
+            self.q.write(NUL_BYTE * new_message_size)
+            self.q.write(MSG_END_CHAR)
+            self.q.seek(0)
+            self.q.write(second_msg)
+        else:
+            self.q.seek(0)
+            self.q.truncate()
 
-            return zlib.decompress(first_msg).decode('utf-8')
+        self._commit()
+
+        return zlib.decompress(first_msg).decode('utf-8')
+
+    def _commit(self):
+        self.q.flush()
+        os.fsync(self.q)
