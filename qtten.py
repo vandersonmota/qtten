@@ -42,6 +42,7 @@ class Queue:
             first_msg = None
             second_msg = None
             data = b''
+            first_msg_stops_at = -1
             second_msg_stops_at = -1
             idx = q.read(INDEX_CHUNK + MSG_END_CHAR_SIZE)
             if idx:
@@ -62,10 +63,10 @@ class Queue:
             if data:
                 if first_msg_stops_at != -1:
                     first_msg = data[0:first_msg_stops_at]
-                    if second_msg_stops_at not in (None, -1):
-                        #updates index
+                    if second_msg_stops_at != -1:
+                        #updates index pointing to next message
                         q.seek(0)
-                        q.write(first_msg_stops_at)
+                        q.write(idx + len(first_msg) + 1)
                     else:
                         # all msgs consumed
                         q.seek(0)
