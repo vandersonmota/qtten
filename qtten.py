@@ -29,13 +29,13 @@ class Queue:
             if not idx:
                 q.write(NUL_BYTE * INDEX_CHUNK)
                 q.write(MSG_END_CHAR)
-
-            pos = q.tell()
+                pos = q.tell()
+                q.seek(0)
+                q.write(bytes(str(pos), encoding='utf-8'))
+            q.seek(0, 2)
             q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
             q.write(MSG_END_CHAR)
 
-            q.seek(0)
-            q.write(bytes(str(pos), encoding='utf-8'))
 
     def dequeue(self):
         with open(self.filename, 'r+b') as q:
@@ -66,7 +66,7 @@ class Queue:
                     if second_msg_stops_at != -1:
                         #updates index pointing to next message
                         q.seek(0)
-                        q.write(idx + len(first_msg) + 1)
+                        q.write(bytes(str(idx + len(first_msg) + 1), encoding='utf-8'))
                     else:
                         # all msgs consumed
                         q.seek(0)
