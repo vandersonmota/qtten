@@ -18,6 +18,16 @@ class TestQtten(unittest.TestCase):
         self.assertEqual('how are you?',  self.q.dequeue())
         self.assertEqual('great!',  self.q.dequeue())
 
+    def test_mixed_enqueue_dequeue(self):
+        self.q.enqueue('I want spiderman pictures!')
+        self.q.enqueue('Calm down JJ')
+
+        self.assertEqual('I want spiderman pictures!',  self.q.dequeue())
+
+        self.q.enqueue('We are Venom!')
+        self.assertEqual('Calm down JJ',  self.q.dequeue())
+        self.assertEqual('We are Venom!',  self.q.dequeue())
+
     def test_dequeue_empty_queue(self):
         self.assertIsNone(self.q.dequeue())
 
