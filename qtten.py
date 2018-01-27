@@ -1,6 +1,5 @@
 import os
 import zlib
-import mmap
 
 COMPRESSION = 9
 MSG_END_TOKEN = b'EOM'
