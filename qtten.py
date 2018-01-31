@@ -35,6 +35,7 @@ class Queue:
         self.q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
         self.q.write(MSG_END_TOKEN)
         self.q.flush()
+        os.fsync(self.q.fileno())
 
     def dequeue(self):
         self.q.seek(0)
@@ -67,10 +68,12 @@ class Queue:
                     self.q.seek(0)
                     self.q.write(bytes(str(idx + len(first_msg) + MSG_END_TOKEN_SIZE), encoding='utf-8'))
                     self.q.flush()
+                    os.fsync(self.q.fileno())
                 else:
                     # all msgs consumed
                     self.q.seek(0)
                     self.q.truncate()
+                    os.fsync(self.q.fileno())
 
                 return zlib.decompress(first_msg).decode('utf-8')
         return None
