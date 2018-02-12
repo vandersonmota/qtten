@@ -63,10 +63,12 @@ class Queue:
             if first_msg_stops_at != -1:
                 first_msg = data[0:first_msg_stops_at]
                 #updates index pointing to next message
+                msg = zlib.decompress(first_msg).decode('utf-8')
+
                 self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
                 self._update_indexes()
+                return msg
 
-                return zlib.decompress(first_msg).decode('utf-8')
         return None
 
     @contextmanager
