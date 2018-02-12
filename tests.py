@@ -9,7 +9,8 @@ from qtten import Queue
 
 class TestQtten(unittest.TestCase):
     def setUp(self):
-        self.q = Queue(tempfile.mkstemp()[1])
+        self.q_name = tempfile.mkstemp()[1]
+        self.q = Queue(self.q_name)
 
     @given(x=text(), y=text(), z=text())
     def test_enqueue_dequeue(self, x, y, z):
@@ -27,6 +28,20 @@ class TestQtten(unittest.TestCase):
         self.q.enqueue(y)
 
         self.assertEqual(x,  self.q.dequeue())
+
+        self.q.enqueue(z)
+        self.assertEqual(y,  self.q.dequeue())
+        self.assertEqual(z,  self.q.dequeue())
+
+    @given(x=text(), y=text(), z=text())
+    def test_queue_persists_state(self, x, y, z):
+        self.q.enqueue(x)
+        self.q.enqueue(y)
+
+        self.assertEqual(x,  self.q.dequeue())
+
+        del self.q
+        self.q = Queue(self.q_name)
 
         self.q.enqueue(z)
         self.assertEqual(y,  self.q.dequeue())

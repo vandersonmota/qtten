@@ -1,4 +1,5 @@
 import os
+import tempfile
 import zlib
 from contextlib import contextmanager
 
@@ -16,39 +17,39 @@ class Queue:
             self.q = open(filename, 'r+b')
         except FileNotFoundError:
             self.q = open(filename, 'w+b')
+        try:
+            self.index = open('{}-index'.format(filename), 'r+b')
+        except FileNotFoundError:
+            self.index = open('{}-index'.format(filename), 'w+b')
+
+        idx = self.index.read().decode('utf-8')
+        self.index.close()
+        if idx:
+            self.next_msg_at, self.last_write_at = map(int, idx.split('-'))
+            self.next_msg_checkpoint = self.next_msg_at
+        else:
+            self.next_msg_at = 0
+            self.next_msg_checkpoint = 0
+            self.last_write_at = 0
 
     def __del__(self):
         self._commit()
         self.q.close()
 
     def enqueue(self, message):
-        self.q.seek(0)
-        idx = self.q.read(INDEX_CHUNK + MSG_END_TOKEN_SIZE)
-        # emtpy file, writing dummy index
         with self._commit():
-            if not idx:
-                self.q.write(NUL_BYTE * INDEX_CHUNK)
-                self.q.write(MSG_END_TOKEN)
-                pos = self.q.tell()
-                self.q.seek(0)
-                self.q.write(bytes(str(pos), encoding='utf-8'))
-            self.q.seek(0, 2)
+            self.q.seek(self.last_write_at)
             self.q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
             self.q.write(MSG_END_TOKEN)
 
     def dequeue(self):
-        self.q.seek(0)
         first_msg = None
         second_msg = None
         data = b''
         first_msg_stops_at = -1
         second_msg_stops_at = -1
-        idx = self.q.read(INDEX_CHUNK + MSG_END_TOKEN_SIZE)
-        if idx:
-            idx = int(idx.rstrip(NUL_BYTE + MSG_END_TOKEN))
-            self.q.seek(idx)
-        else:
-            return None
+
+        self.q.seek(self.next_msg_at)
 
         while True:
             chunk = self.q.read(READ_CHUNK)
@@ -63,14 +64,8 @@ class Queue:
             if first_msg_stops_at != -1:
                 with self._commit():
                     first_msg = data[0:first_msg_stops_at]
-                    if second_msg_stops_at != -1:
-                        #updates index pointing to next message
-                        self.q.seek(0)
-                        self.q.write(bytes(str(idx + len(first_msg) + MSG_END_TOKEN_SIZE), encoding='utf-8'))
-                    else:
-                        # all msgs consumed
-                        self.q.seek(0)
-                        self.q.truncate()
+                    #updates index pointing to next message
+                    self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
 
                 return zlib.decompress(first_msg).decode('utf-8')
         return None
@@ -80,3 +75,26 @@ class Queue:
         yield
         self.q.flush()
         os.fsync(self.q.fileno())
+        self._update_indexes()
+
+    def _update_indexes(self):
+        last_write_at = self.q.tell()
+
+        old_next_msg_at = self.next_msg_at
+        old_last_write_at = self.last_write_at
+        try:
+            tmp_idx = tempfile.NamedTemporaryFile(dir=os.path.dirname(self.index.name), mode='wb', delete=False)
+            tmp_idx.write(bytes('{}-{}'.format(self.next_msg_checkpoint, last_write_at), encoding='utf-8'))
+            tmp_idx.flush()
+            os.fsync(tmp_idx.fileno())
+        finally:
+            tmp_idx.close()
+        old_idx = os.path.abspath(self.index.name)
+        new_idx = os.path.abspath(tmp_idx.name)
+        try:
+            self.last_write_at = last_write_at
+            self.next_msg_at = self.next_msg_checkpoint
+            os.rename(new_idx, old_idx)
+        except:
+            self.last_write_at = old_last_write_at
+            self.next_msg_at = old_next_msg_at
