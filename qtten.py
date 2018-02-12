@@ -4,11 +4,10 @@ import zlib
 from contextlib import contextmanager
 
 COMPRESSION = 9
-MSG_END_TOKEN = b'EOM'
+MSG_END_TOKEN = b'\x00EOM\x00'
 NUL_BYTE = b'\x00'
 READ_CHUNK = 2048
-INDEX_CHUNK = 50
-MSG_END_TOKEN_SIZE = 3
+MSG_END_TOKEN_SIZE = 5
 
 
 class Queue:
