@@ -1,7 +1,8 @@
 import tempfile
+import zlib
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from hypothesis.strategies import text
 from hypothesis import given
 from qtten import Queue
@@ -46,6 +47,18 @@ class TestQtten(unittest.TestCase):
         self.q.enqueue(z)
         self.assertEqual(y,  self.q.dequeue())
         self.assertEqual(z,  self.q.dequeue())
+
+    @given(x=text(), y=text(), z=text())
+    def test_corrupted_enqueue(self, x, y, z):
+        self.q.enqueue(x)
+
+
+        self.q.enqueue(z)
+
+        self.assertEqual(x,  self.q.dequeue())
+        self.assertEqual(z,  self.q.dequeue())
+        # no more msgs
+        self.assertEqual(None,  self.q.dequeue())
 
     def test_dequeue_empty_queue(self):
         self.assertIsNone(self.q.dequeue())
