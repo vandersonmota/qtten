@@ -36,7 +36,9 @@ class Queue:
         self.q.close()
 
     def enqueue(self, message):
-        with self._commit():
+        if not message:
+            return
+        with self._commit(True):
             self.q.seek(self.last_write_at)
             self.q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
             self.q.write(MSG_END_TOKEN)
@@ -72,14 +74,17 @@ class Queue:
         return None
 
     @contextmanager
-    def _commit(self):
+    def _commit(self, written=False):
         yield
         self.q.flush()
         os.fsync(self.q.fileno())
-        self._update_indexes()
+        self._update_indexes(written)
 
-    def _update_indexes(self):
-        last_write_at = self.q.tell()
+    def _update_indexes(self, written=False):
+        if written:
+            last_write_at = self.q.tell()
+        else:
+            last_write_at = self.last_write_at
 
         old_next_msg_at = self.next_msg_at
         old_last_write_at = self.last_write_at

@@ -13,7 +13,7 @@ class TestQtten(unittest.TestCase):
         self.q_name = tempfile.mkstemp()[1]
         self.q = Queue(self.q_name)
 
-    @given(x=text(), y=text(), z=text())
+    @given(x=text(min_size=1), y=text(min_size=1), z=text(min_size=1))
     def test_enqueue_dequeue(self, x, y, z):
         self.q.enqueue(x)
         self.q.enqueue(y)
@@ -23,7 +23,7 @@ class TestQtten(unittest.TestCase):
         self.assertEqual(y,  self.q.dequeue())
         self.assertEqual(z,  self.q.dequeue())
 
-    @given(x=text(), y=text(), z=text())
+    @given(x=text(min_size=1), y=text(min_size=1), z=text(min_size=1))
     def test_mixed_enqueue_dequeue(self, x, y, z):
         self.q.enqueue(x)
         self.q.enqueue(y)
@@ -34,7 +34,7 @@ class TestQtten(unittest.TestCase):
         self.assertEqual(y,  self.q.dequeue())
         self.assertEqual(z,  self.q.dequeue())
 
-    @given(x=text(), y=text(), z=text())
+    @given(x=text(min_size=1), y=text(min_size=1), z=text(min_size=1))
     def test_queue_persists_state(self, x, y, z):
         self.q.enqueue(x)
         self.q.enqueue(y)
@@ -48,15 +48,24 @@ class TestQtten(unittest.TestCase):
         self.assertEqual(y,  self.q.dequeue())
         self.assertEqual(z,  self.q.dequeue())
 
-    @given(x=text(), y=text(), z=text())
+    @given(x=text(min_size=1), y=text(min_size=1), z=text(min_size=1))
     def test_corrupted_enqueue(self, x, y, z):
         self.q.enqueue(x)
 
+        original_update_indexes = self.q._update_indexes
+
+        self.q._update_indexes = Mock()
+        # due OS error indexes where not updated
+        self.q.enqueue(y)
+        self.q._update_indexes = original_update_indexes
 
         self.q.enqueue(z)
 
         self.assertEqual(x,  self.q.dequeue())
         self.assertEqual(z,  self.q.dequeue())
+
+        self.q.enqueue(x)
+        self.assertEqual(x,  self.q.dequeue())
         # no more msgs
         self.assertEqual(None,  self.q.dequeue())
 
