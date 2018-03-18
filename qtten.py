@@ -16,10 +16,11 @@ class Queue:
             self.q = open(filename, 'r+b')
         except FileNotFoundError:
             self.q = open(filename, 'w+b')
+        index_filename = '{}-index'.format(filename)
         try:
-            self.index = open('{}-index'.format(filename), 'r+b')
+            self.index = open(index_filename, 'r+b')
         except FileNotFoundError:
-            self.index = open('{}-index'.format(filename), 'w+b')
+            self.index = open(index_filename, 'w+b')
 
         idx = self.index.read().decode('utf-8')
         self.index.close()
@@ -65,10 +66,13 @@ class Queue:
             if first_msg_stops_at != -1:
                 first_msg = data[0:first_msg_stops_at]
                 #updates index pointing to next message
-                msg = zlib.decompress(first_msg).decode('utf-8')
-
-                self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
-                self._update_indexes()
+                try:
+                    msg = zlib.decompress(first_msg).decode('utf-8')
+                    self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
+                    self._update_indexes()
+                except zlib.error:
+                    # invalid msg
+                    msg = None
                 return msg
 
         return None
