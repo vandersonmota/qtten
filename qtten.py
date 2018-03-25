@@ -34,8 +34,8 @@ class Queue:
             self.last_write_at = 0
 
         self.buffer_size = buffer_size
-        self.to_write = deque()
-        self.read_ahead = deque()
+        self.write_buffer = deque()
+        self.read_buffer = deque()
 
     def __del__(self):
         self._commit()
@@ -47,14 +47,14 @@ class Queue:
 
         full_msg = zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION) + MSG_END_TOKEN
 
-        self.to_write.append(full_msg)
+        self.write_buffer.append(full_msg)
 
-        if len(self.to_write) >= self.buffer_size:
+        if len(self.write_buffer) >= self.buffer_size:
             with self._commit(True):
-                all_msgs = b''.join(self.to_write)
+                all_msgs = b''.join(self.write_buffer)
                 self.q.seek(self.last_write_at)
                 self.q.write(all_msgs)
-                self.to_write = deque()
+                self.write_buffer = deque()
 
     def dequeue(self):
         first_msg = None
@@ -86,7 +86,7 @@ class Queue:
                 msg = None
         else:
             try:
-                msg = self.to_write.popleft()
+                msg = self.write_buffer.popleft()
                 msg_size = len(msg) - MSG_END_TOKEN_SIZE
                 msg = zlib.decompress(msg[:msg_size]).decode('utf-8')
             except (IndexError, zlib.error):
