@@ -36,6 +36,7 @@ class TestQtten(unittest.TestCase):
 
     @given(x=text(min_size=1), y=text(min_size=1), z=text(min_size=1))
     def test_queue_persists_state(self, x, y, z):
+        self.q.buffer_size = 1
         self.q.enqueue(x)
         self.q.enqueue(y)
 
@@ -50,6 +51,7 @@ class TestQtten(unittest.TestCase):
 
     @given(x=text(min_size=1), y=text(min_size=1), z=text(min_size=1))
     def test_corrupted_enqueue(self, x, y, z):
+        self.q.buffer_size = 1
         self.q.enqueue(x)
 
         original_update_indexes = self.q._update_indexes

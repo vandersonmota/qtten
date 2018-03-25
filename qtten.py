@@ -1,6 +1,7 @@
 import os
 import tempfile
 import zlib
+from collections import deque
 from contextlib import contextmanager
 
 COMPRESSION = 9
@@ -11,7 +12,7 @@ MSG_END_TOKEN_SIZE = 5
 
 
 class Queue:
-    def __init__(self, filename):
+    def __init__(self, filename, buffer_size=20):
         try:
             self.q = open(filename, 'r+b')
         except FileNotFoundError:
@@ -32,6 +33,10 @@ class Queue:
             self.next_msg_checkpoint = 0
             self.last_write_at = 0
 
+        self.buffer_size = buffer_size
+        self.to_write = deque()
+        self.read_ahead = deque()
+
     def __del__(self):
         self._commit()
         self.q.close()
@@ -39,10 +44,17 @@ class Queue:
     def enqueue(self, message):
         if not message:
             return
-        with self._commit(True):
-            self.q.seek(self.last_write_at)
-            self.q.write(zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION))
-            self.q.write(MSG_END_TOKEN)
+
+        full_msg = zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION) + MSG_END_TOKEN
+
+        self.to_write.append(full_msg)
+
+        if len(self.to_write) >= self.buffer_size:
+            with self._commit(True):
+                all_msgs = b''.join(self.to_write)
+                self.q.seek(self.last_write_at)
+                self.q.write(all_msgs)
+                self.to_write = deque()
 
     def dequeue(self):
         first_msg = None
@@ -62,20 +74,25 @@ class Queue:
             if first_msg_stops_at != -1:
                 second_msg_stops_at = data.find(MSG_END_TOKEN, first_msg_stops_at + MSG_END_TOKEN_SIZE)
 
-        if data:
-            if first_msg_stops_at != -1:
-                first_msg = data[0:first_msg_stops_at]
-                #updates index pointing to next message
-                try:
-                    msg = zlib.decompress(first_msg).decode('utf-8')
-                    self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
-                    self._update_indexes()
-                except zlib.error:
-                    # invalid msg
-                    msg = None
-                return msg
+        if data and first_msg_stops_at != -1:
+            first_msg = data[0:first_msg_stops_at]
+            #updates index pointing to next message
+            try:
+                msg = zlib.decompress(first_msg).decode('utf-8')
+                self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
+                self._update_indexes()
+            except zlib.error:
+                # invalid msg
+                msg = None
+        else:
+            try:
+                msg = self.to_write.popleft()
+                msg_size = len(msg) - MSG_END_TOKEN_SIZE
+                msg = zlib.decompress(msg[:msg_size]).decode('utf-8')
+            except (IndexError, zlib.error):
+                msg = None
 
-        return None
+        return msg
 
     @contextmanager
     def _commit(self, written=False):
