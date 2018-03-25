@@ -45,15 +45,16 @@ class Queue:
         if not message:
             return
 
-        full_msg = zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION) + MSG_END_TOKEN
+        msg = zlib.compress(bytes(message, encoding='utf-8'), COMPRESSION)
 
-        self.write_buffer.append(full_msg)
+        self.write_buffer.append(msg)
 
         if len(self.write_buffer) >= self.buffer_size:
             with self._commit(True):
-                all_msgs = b''.join(self.write_buffer)
+                all_msgs = MSG_END_TOKEN.join(self.write_buffer)
                 self.q.seek(self.last_write_at)
                 self.q.write(all_msgs)
+                self.q.write(MSG_END_TOKEN)
                 self.write_buffer = deque()
 
     def dequeue(self):
@@ -87,8 +88,7 @@ class Queue:
         else:
             try:
                 msg = self.write_buffer.popleft()
-                msg_size = len(msg) - MSG_END_TOKEN_SIZE
-                msg = zlib.decompress(msg[:msg_size]).decode('utf-8')
+                msg = zlib.decompress(msg).decode('utf-8')
             except (IndexError, zlib.error):
                 msg = None
 
