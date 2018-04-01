@@ -7,7 +7,7 @@ from contextlib import contextmanager
 COMPRESSION = 9
 MSG_END_TOKEN = b'\x00EOM\x00'
 NUL_BYTE = b'\x00'
-READ_CHUNK = 2048
+READ_CHUNK = 1024 * 30
 MSG_END_TOKEN_SIZE = 5
 
 
@@ -38,7 +38,7 @@ class Queue:
         self.read_buffer = deque()
 
     def __del__(self):
-        self._commit()
+        self._commit(written=bool(self.write_buffer))
         self.q.close()
 
     def enqueue(self, message):
@@ -59,38 +59,50 @@ class Queue:
 
     def dequeue(self):
         first_msg = None
-        second_msg = None
         data = b''
         first_msg_stops_at = -1
-        second_msg_stops_at = -1
+        msg = None
 
-        self.q.seek(self.next_msg_at)
-
-        while True:
-            chunk = self.q.read(READ_CHUNK)
-            if chunk == b'' or second_msg_stops_at != -1:
-                break
-            data += chunk
-            first_msg_stops_at = data.find(MSG_END_TOKEN)
-            if first_msg_stops_at != -1:
-                second_msg_stops_at = data.find(MSG_END_TOKEN, first_msg_stops_at + MSG_END_TOKEN_SIZE)
-
-        if data and first_msg_stops_at != -1:
-            first_msg = data[0:first_msg_stops_at]
-            #updates index pointing to next message
+        if self.read_buffer:
+            first_msg = self.read_buffer.popleft()
             try:
                 msg = zlib.decompress(first_msg).decode('utf-8')
                 self.next_msg_checkpoint = self.next_msg_at + len(first_msg) + MSG_END_TOKEN_SIZE
-                self._update_indexes()
             except zlib.error:
                 # invalid msg
                 msg = None
-        else:
-            try:
-                msg = self.write_buffer.popleft()
-                msg = zlib.decompress(msg).decode('utf-8')
-            except (IndexError, zlib.error):
-                msg = None
+
+        if not msg:
+            self._update_indexes()
+            self.q.seek(self.next_msg_at)
+
+            while True:
+                chunk = self.q.read(READ_CHUNK)
+                if chunk == b'' or first_msg_stops_at != -1:
+                    break
+                data += chunk
+                first_msg_stops_at = data.find(MSG_END_TOKEN)
+
+            if data and first_msg_stops_at != -1:
+                first_msg = data[0:first_msg_stops_at]
+                first_msg_size = len(first_msg) + MSG_END_TOKEN_SIZE
+                #updates index pointing to next message
+                try:
+                    msg = zlib.decompress(first_msg).decode('utf-8')
+                    self.next_msg_checkpoint = self.next_msg_at + first_msg_size
+                    self._update_indexes()
+                except zlib.error:
+                    # invalid msg
+                    msg = None
+
+                msgs = data[first_msg_size:].split(MSG_END_TOKEN)[:-1]
+                self.read_buffer.extend(msgs)
+            else:
+                try:
+                    msg = self.write_buffer.popleft()
+                    msg = zlib.decompress(msg).decode('utf-8')
+                except (IndexError, zlib.error):
+                    msg = None
 
         return msg
 
